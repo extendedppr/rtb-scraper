@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "rtb-scraper"
+version = "0.0.1"
+description = "Scrape RTB disputes and properties, give tools to interact with them"
+authors = ["ExtendedPPR <extendedppr@gmail.com>"]
+readme = "README.md"
+packages = [{include="rtb_scraper", from="src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+requests = "2.32.3"
+bs4 = "0.0.2"
+beautifulsoup4 = "4.13.4"
+backoff = "2.2.1"
+pymupdf = "1.25.5"
+peewee = "3.17.9"
+orjson = "3.10.16"
+progressbar2 = "4.5.0"
+ocrmypdf = "15.4.4"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.2.0"
+mock = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+scrape = "scripts.scrape:main"

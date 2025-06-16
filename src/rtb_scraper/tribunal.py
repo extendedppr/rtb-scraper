@@ -92,8 +92,6 @@ class TribunalDB:
                 else:
                     query = query.where(field_name.ilike(value))
 
-        print(query)
-
         return [tribunal for tribunal in query]
 
     def exists(

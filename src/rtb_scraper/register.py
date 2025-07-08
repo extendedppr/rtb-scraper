@@ -55,9 +55,7 @@ class RegisterDB:
         return RegisterObject.select().count()
 
     def __iter__(self) -> Iterable[RegisterObject]:
-        for chunk in RegisterObject.select().chunk(100):
-            for rtb_obj in chunk:
-                yield rtb_obj
+        return RegisterObject.select().iterator(chunk_size=100)
 
     def drop_data(self) -> None:
         RegisterObject.delete().execute()

@@ -1,38 +1,38 @@
 import re
 import datetime
-from typing import Iterable, List, Dict, Optional
+from typing import Iterable, List, Dict
 
 from peewee import Model, CharField, SqliteDatabase, DateTimeField
 
 from rtb_scraper.constants import (
     PDF_ADDRESS_MAP,
     BAD_ADDRESS_PREFIXES,
-    REPLACE_TEXT_IN_DETERMINATION,
+    GENERAL_REPLACE_TEXT,
+    DETERMINATION_ORDER_DATE_REPLACEMENTS,
 )
 from rtb_scraper.settings import DB_LOCATION
 from rtb_scraper.utils import clean_string, remove_brackets_and_contents, removeprefix
 
 
-def extract_data_from_text(
-    text: str, source_pdf: Optional[str] = None
-) -> Dict[str, str]:
+def extract_determination_data_from_text(text: str, source_pdf: str) -> Dict[str, str]:
 
-    for to_replace, replacement in REPLACE_TEXT_IN_DETERMINATION:
+    for to_replace, replacement in GENERAL_REPLACE_TEXT:
         text = text.replace(to_replace, replacement)
 
-    start_address_match = r"(?i)(?:(?:the|rented|disputed) (?:dwelling|property)(?: at| located(?: at)?)?|tenancy (?:at|of the dwelling at|of)|property at|located)"
+    while "  " in text:
+        text = text.replace("  ", " ")
 
-    end_address_match = r"(?=(\.?[,;\s]? (is (invalid|invaild|valid|upheld|not upheld|deemed))|[\,;\s] This Order|\, shall| 2\. | 2\) |, there is| to be paid| on or|, as amended| within |\, at the date| is not| is valid| is abandoned| are invalid|\, up to|\, are not up| was unlawful| the security deposit|\, is dismissed|\, insofar| is withdrawn| is partially upheld| This Order| was made by|\, by way of| to the| has been| is €|\, are valid| was not| and breach|\, plus damages|\, are both| together with the sum| leaving|\, on | was €|\, is in the sum| shall vacate|\, is unenforceable| gave the| its abandon| between the| until such| was an| pursuant to| and €| up to| terminated on| and the payment| is, with| contrary to| are upheld| is therefore| on the grounds| are valid| was invalid| was valid| in breach| having off| is considered|is valid|The enforcement|also known as|\: 1\)|and cannot be|having allowed|due to|having deducted|as and from|by way of|is still ongoing|This\/Order|by the|The Notice|followed by| is in invalid|together with|are not upheld|and specif|in circum|are deemed|and shall pay|and consequently|are abandoned|plus the|carried out|are formally|and for the|is valid|and shall|will end on|having properly|the sum of|with 30 days|and dated|is vaiid|is res|for each| This |in addition| regarding |being rent|remains| cannot |at the date|for the |is invatid|as served|for failing|Also Known|and terminate|by text| remains |provides for|has not been| valid|against the|as served|and with|is abandonded|and for|less the|The Applicant|is lawfully|and a further|because this matter|is statute barred|\: 1|treland|\; \*|3\.The Respondent|The Respondent|isn ot upheld))"
+    start_address_match = r"(?i)(?:(?:the|rented|disputed) (?:dwelling|property|above dwelling)(?: at| located(?: at)?)?|tenancy[,]? (?:at|of the dwelling at|of)|property at|located|shall vacate)"
 
-    # treland is likely Ireland, doesn't matter if we stop at it
+    end_address_match = r"(?=(\.?[,;\s]? (is (invalid|invaild|valid|upheld|not upheld|deemed))|[\,;\s] This Order|\, shall| 2\. | 2\) |, there is| to be paid| on or|, as amended| within |\, at the date| is not| is valid| is abandoned| are invalid|\, up to|\, are not up| was unlawful| the security deposit|\, is dismissed|\, insofar| is withdrawn| is partially upheld| This Order| was made by|\, by way of| to the| has been| is €|\, are valid| was not| and breach|\, plus damages|\, are both| together with the sum| leaving|\, on | was €|\, is in the sum| shall vacate|\, is unenforceable| gave the| its abandon| between the| until such| was an| pursuant to| and €| up to| terminated on| and the payment| is, with| contrary to| are upheld| is therefore| on the grounds| are valid| was invalid| was valid| in breach| having off| is considered|is valid|The enforcement|also known as|\: 1\)|and cannot be|having allowed|due to|having deducted|as and from|by way of|is still ongoing|This\/Order|by the|The Notice|followed by| is in invalid|together with|are not upheld|and specif|in circum|are deemed|and shall pay|and consequently|are abandoned|plus the|carried out|are formally|and for the|is valid|and shall|will end on|having properly|the sum of|with 30 days|and dated|is vaiid|is res|for each| This |in addition| regarding |being rent|remains| cannot |at the date|for the |is invatid|as served|for failing|Also Known|and terminate|by text| remains |provides for|has not been| valid|against the|as served|and with|is abandonded|and for|less the|The Applicant|is lawfully|and a further|because this matter|is statute barred|\: 1|treland|\; \*|3\.The Respondent|The Respondent|isn ot upheld|with a deduction of|in full and final|the Residential Tenancies Board|is hereby withdrawn|are both|\. a This|\. Claire|\, commencing|\. The said|\. All become| before |\. rder| was a |\. 2.The | the terms of| from | as follows| will vacate|comprised as follows|comprising repayment|The Tribunal))"
 
     patterns = {
         "reference_number": r"Ref: (\w+\-\w+)",
-        "respondent_tenant": r"] and (.*)\s\[Respondent Tenants?\]",
-        "respondent_landlord": r"]\sand\s(.*)\s\[Respondent Landlords?\]",
-        "applicant_landlord": r"matter of\s(.*)\s\[Applicant Landlords?\]",
-        "applicant_tenant": r"matte of\s(.*)\s\[Applicant Tenants?\]",
-        "order_date": r"This Order was made by the Residential(?:\!)? Tenancies Board on (\d+ \w+ \d+)",
+        "respondent_tenant": r"] and (.*?)\s(\[Respondent Tenants?\]|\[Respondent Tenant\(s\)\])",
+        "respondent_landlord": r"]\sand\s(.*?)\s(\[Respondent Landlords?\]|\[Respondent Landlord\(s\)\])",
+        "applicant_landlord": r"(?:matter of|matter)\s(.*?)\s(\[Appellant Landlords?\]|\[Appellant Landlord\(s\)\]|\[Applicant Landlords?\]|\[Applicant Landlord\(s\)\])",
+        "applicant_tenant": r"matter of\s(.*?)\s(\[Appellant Tenants?\]|\[Appellant Tenant\(s\)\]|\[Applicant Tenants?\]|\[Applicant Tenant\(s\)\])",
+        "order_date": r"made by the Residential(?:\!)? Tenancies Board on (?:the )?(\d+ \w+ \d+)",
         "address": start_address_match + r"\s*([\s\S]*?)\s*" + end_address_match,
     }
 
@@ -40,8 +40,8 @@ def extract_data_from_text(
     for key, pattern in patterns.items():
         if match := re.search(pattern, text):
             if key == "address":
-
-                if address := PDF_ADDRESS_MAP.get(source_pdf):
+                address = PDF_ADDRESS_MAP.get(source_pdf)
+                if address is not None:
                     extracted_data[key] = clean_string(
                         remove_brackets_and_contents(address)
                     )
@@ -69,12 +69,18 @@ def extract_data_from_text(
                     extracted_data[key] = None
 
     if extracted_data.get("order_date"):
+
+        for to_replace, replacement in DETERMINATION_ORDER_DATE_REPLACEMENTS:
+            extracted_data["order_date"] = extracted_data["order_date"].replace(
+                to_replace, replacement
+            )
+
         try:
             extracted_data["order_date"] = datetime.datetime.strptime(
                 extracted_data["order_date"], "%d %B %Y"
             )
         except:
-            print(f'Bad date: "{extracted_data["order_date"]}"')
+            print(f'Bad date: "{extracted_data["order_date"]}" {source_pdf}')
             extracted_data["order_date"] = None
 
     if extracted_data.get("address"):
@@ -123,9 +129,7 @@ class DeterminationDB:
         return Determination.select().count()
 
     def __iter__(self) -> Iterable[Determination]:
-        for chunk in Determination.select().chunk(100):
-            for determination in chunk:
-                yield determination
+        return Determination.select().iterator(chunk_size=100)
 
     def drop_data(self) -> None:
         Determination.delete().execute()

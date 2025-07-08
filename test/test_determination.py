@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from unittest import TestCase
@@ -5,13 +6,13 @@ from unittest import TestCase
 from rtb_scraper.determination import (
     Determination,
     DeterminationDB,
-    extract_data_from_text,
+    extract_determination_data_from_text,
 )
 
 
 class DeterminationTest(TestCase):
 
-    def test_extract_data_from_text_order_date(self):
+    def test_extract_determination_data_from_text_order_date(self):
         data = [
             (
                 """Dublin 6.
@@ -31,10 +32,11 @@ x
 
         for text, expected_address in data:
             self.assertEqual(
-                extract_data_from_text(text).get("order_date"), expected_address
+                extract_determination_data_from_text(text, None).get("order_date"),
+                expected_address,
             )
 
-    def test_extract_data_from_text_address(self):
+    def test_extract_determination_data_from_text_address(self):
 
         data = [
             (
@@ -170,8 +172,109 @@ This Order was made by the Residential Tenancies Board on 15 November 2023.""",
 
         for text, expected_address in data:
             self.assertEqual(
-                extract_data_from_text(text).get("address"), expected_address
+                extract_determination_data_from_text(text, None).get("address"),
+                expected_address,
             )
+
+        base_resources = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "test/test_resources/",
+        )
+
+        data = [
+            (
+                "Determination_Order_200.txt.pdf.txt",
+                {
+                    "reference_number": "TR1018-003312",
+                    "respondent_landlord": "Ken Fennel (Receiver over certain assets of John Trears and Kristen Trears",
+                    "applicant_tenant": "Stephen Pascaniuc",
+                    "order_date": datetime(2019, 2, 14, 0, 0),
+                    "address": "24 Charnwood Park, Clonsilla, Dublin 15",
+                },
+                "Determination_Order_200.pdf",
+            ),
+            (
+                "Determination_Order_7.txt.pdf.txt",
+                {
+                    "reference_number": "TR0218-002819",
+                    "respondent_landlord": "Stephen Tenant, Receiver Over Certain Assets of Pauline and Brendan Fowler c/o Grant Thornton",
+                    "applicant_tenant": "Lauryans Bagonas",
+                    "order_date": datetime(2018, 7, 10, 0, 0),
+                    "address": "1 An T-Ullghort, Rope Walk, Kilnacloy, Monaghan",
+                },
+                "Determination_Order_7.pdf",
+            ),
+            (
+                "Determination_Order_96.txt.pdf.txt",
+                {
+                    "reference_number": "TR0118-002809",
+                    "respondent_landlord": "Brian Bourke",
+                    "applicant_tenant": "Jason Keating",
+                    "order_date": datetime(2018, 8, 30, 0, 0),
+                    "address": "the commencement of the tenancy term in",
+                },
+                "Determination_Order_96.pdf",
+            ),
+            (
+                "TR0221-004752_Determination_Order.txt.pdf.txt",
+                {
+                    "reference_number": "TR0221-004752",
+                    "applicant_tenant": "Tevian Mirrelson",
+                    "order_date": datetime(2021, 4, 21, 0, 0),
+                    "address": "Apartment 1, 14 Heytesbury Street, Portobello, Dublin 8, DO8H2HO",
+                    "respondent_landlord": "Caroline Kennedy",
+                },
+                "TR0221-004752_Determination_Order.pdf",
+            ),
+            (
+                "TR1020-004471_Determination_Order.txt.pdf.txt",
+                {
+                    "reference_number": "TR1020-004471",
+                    "respondent_tenant": "Taylor Byrne, Dylan Byrne",
+                    "order_date": datetime(2021, 5, 19, 0, 0),
+                    "address": "",
+                    "applicant_landlord": "TestCheckpointerAnn Marie Horan",
+                },
+                "TR1020-004471_Determination_Order.pdf",
+            ),
+            (
+                "TR0819-003939_Determination_Order.txt.pdf.txt",
+                {
+                    "reference_number": "TR0819-003939",
+                    "respondent_tenant": "Raymond Halpin",
+                    "applicant_landlord": "Declan Cleary",
+                    "order_date": datetime(2019, 11, 28, 0, 0),
+                    "address": "44 Charlemont Estate, Griffith Avenue, Marino, Dublin 9",
+                },
+                "TR0819-003939_Determination_Order.pdf",
+            ),
+            (
+                "TR0320-004274_Determination_Order.txt.pdf.txt",
+                {
+                    "reference_number": "TRO320-004274",
+                    "respondent_landlord": "Tuath Housing Association",
+                    "applicant_tenant": "Marguerite O Driscoll",
+                    "order_date": datetime(2021, 1, 28, 0, 0),
+                    "address": "31 Meadow Crescent, The Meadows Hollyhill, Cork",
+                },
+                "TR0320-004274_Determination_Order.pdf",
+            ),
+            (
+                "TR0919-003968_Determination_Order.txt.pdf.txt",
+                {
+                    "reference_number": "TR0919-003968",
+                    "respondent_landlord": "Susannah Denardo",
+                    "applicant_tenant": "Audrius Karosas",
+                    "order_date": datetime(2020, 1, 9, 0, 0),
+                    "address": "12 Jervis Lane Upper, Dublin 1, D01 F2P6, as the used",
+                },
+                "TR0919-003968_Determination_Order.pdf",
+            ),
+        ]
+
+        for d in data:
+            content = open(os.path.join(base_resources, d[0]), "r").read()
+            self.assertEqual(extract_determination_data_from_text(content, d[2]), d[1])
 
     def test_repr(self):
         determination_obj = Determination(

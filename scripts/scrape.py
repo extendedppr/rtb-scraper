@@ -3,42 +3,75 @@ import datetime
 import json
 import argparse
 import time
-import re
 from pathlib import Path
 
 import progressbar
 import requests
+from bs4 import BeautifulSoup
 
 from rtb_scraper.register import register, RegisterObject
-from rtb_scraper.settings import SAVE_DIRS
+from rtb_scraper.settings import RTB_TRIBUNAL_AND_DETERMINATION_DIR
 from rtb_scraper.constants import (
+    RTB_REFRESH_URL,
+    MAIN_TYPES,
+    DISPUTE_TYPES,
     COUNTY_ID_MAP,
-    BASE_URLS,
-    PAGINATED_URLS,
     PROPERTY_COUNTY_URL,
+    POST_HEADERS
 )
 
 from rtb_scraper.utils import (
-    fetch_page,
     download_file,
-    clean_string,
-    _ocrmypdf
+    _ocrmypdf,
+    is_determination_or_tribunal,
+    get_post_data,
+    read_file
 )
 
-from rtb_scraper.tribunal import tribunals, Tribunal
+from rtb_scraper.tribunal import (
+    tribunals,
+    extract_tribunal_data_from_text,
+    Tribunal,
+)
 from rtb_scraper.determination import (
     Determination,
     determinations,
-    extract_data_from_text,
+    extract_determination_data_from_text,
 )
 
 
-def process_determination(source_pdf, raw_text_path, subject):
-    text = None
-    with open(raw_text_path, "r") as fh:
-        text = fh.read()
+def process_tribunal(fp, raw_text_path, subject_of_dispute, source_pdf):
+    if fp.suffix != ".pdf":
+        print(f"Not a pdf: {fp}")
+        return
 
-    extracted_data = extract_data_from_text(text, source_pdf=source_pdf)
+    if not os.path.exists(raw_text_path):
+        print(f"No text file: {raw_text_path}")
+        return
+
+    text = read_file(raw_text_path)
+
+    data = extract_tribunal_data_from_text(text)
+
+    tribunals.insert(
+        Tribunal(
+            tribunal_ref_no=data.get("tribunal_ref_no", None),
+            case_ref_no=data.get("case_ref_no", None),
+            tenant=data.get("tenant", None),
+            landlord=data.get("landlord", None),
+            address=data.get("address", None),
+            applicant=data.get("applicant", None),
+            subject=subject_of_dispute,
+            source_pdf=source_pdf,
+        )
+    )
+
+
+def process_determination(source_pdf, raw_text_path, subject):
+
+    text = read_file(raw_text_path)
+
+    extracted_data = extract_determination_data_from_text(text, source_pdf=source_pdf)
 
     determinations.insert(
         Determination(
@@ -92,102 +125,43 @@ def process_property(county_id):
     time.sleep(30)
 
 
-def get_page_items(scrape_type):
-    print('Cannot give ETA. Will be however many pages there are here: https://www.rtb.ie/search-results/listing?collection=adjudication_orders|tribunal_orders')
+def get_page_items():
+    print("Cannot give ETA. Just wait a day or two")
 
     bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
 
-    for idx, page_no in enumerate(range(10_000)):
+    for main_type in MAIN_TYPES:
+        print(f'\nStart scraping: {main_type}')
 
-        bar.update(idx)
+        for dispute_type in DISPUTE_TYPES:
+            print(f'\nDispute type: {dispute_type}')
 
-        # Be kind, be patient
-        time.sleep(5)
+            for year in list(range(2015, datetime.datetime.now().year + 1)):
+                print(f'\nYear: {year}')
 
-        url = (
-            BASE_URLS[scrape_type]
-            if page_no == 0
-            else PAGINATED_URLS[scrape_type].format(pn=page_no)
-        )
-        soup = fetch_page(url)
-        download_cards = soup.find_all("p", {"class": "download-card__title"})
+                # Arbitrary 500 since it breaks before it gets to it
+                for idx, page_no in enumerate(range(1, 500)):
 
-        if not download_cards:
-            print("Finished")
-            break
+                    bar.update(idx)
 
-        for item in [p for p in download_cards if scrape_type.title() in p.string]:
-            yield (item)
+                    data = get_post_data(year, dispute_type, main_type, page_no)
 
+                    response = requests.post(RTB_REFRESH_URL, headers=POST_HEADERS, json=data)
 
-def process_tribunal(fp, raw_text_path, subject_of_dispute, source_pdf):
-    if fp.suffix != ".pdf":
-        print(f"Not a pdf: {fp}")
-        return
+                    data = response.json()
+                    soup = BeautifulSoup(data["template"], "html.parser")
 
-    text = None
-    with open(raw_text_path, "r") as fh:
-        text = fh.read()
+                    download_cards = soup.find_all("article")
 
-    regexes = [
-        re.compile(
-            r"Tribunal\sReference\sNo:\s(?P<tribunal_ref_no>[^\s/]+)\s/\sCase\sRef\sNo:\s(?P<case_ref_no>[^\s]+)\s*",
-            re.VERBOSE,
-        ),
-        re.compile(r"Tenant:\s*(?P<tenant>[^\n]+)\s*", re.VERBOSE),
-        re.compile(r"Landlord:\s*(?P<landlord>[^\n]+)\s*", re.VERBOSE),
-        re.compile(
-            r"Address\sof\sRented\sDwelling:\s*(?P<address>[^\n]+)\s*",
-            re.VERBOSE,
-        ),
-        re.compile(r"Applicant\s(?P<applicant>\w+)", re.VERBOSE),
-    ]
+                    if not download_cards:
+                        # Finished
+                        break
 
-    data = {}
+                    # Be kind, be patient
+                    time.sleep(5)
 
-    for regex in regexes:
-        if match := regex.search(text):
-            match_data = {k: clean_string(v) for k, v in match.groupdict().items()}
-            data.update(match_data)
-
-    if "Applicant" in data.get("landlord", ""):
-        data["landlord"] = clean_string(
-            data["landlord"][: data["landlord"].find("Applicant")]
-        )
-    if "Receiver" in data.get("landlord", ""):
-        data["landlord"] = clean_string(
-            data["landlord"][: data["landlord"].find("Receiver")]
-        )
-    if "(Acting" in data.get("landlord", ""):
-        data["landlord"] = clean_string(
-            data["landlord"][: data["landlord"].find("(Acting")]
-        )
-    if "(acting" in data.get("landlord", ""):
-        data["landlord"] = clean_string(
-            data["landlord"][: data["landlord"].find("(acting")]
-        )
-    if "acting" in data.get("landlord", ""):
-        data["landlord"] = clean_string(
-            data["landlord"][: data["landlord"].find("acting")]
-        )
-
-    if "(otherwise" in data.get("tenant", ""):
-        data["tenant"] = clean_string(
-            data["tenant"][: data["tenant"].find("(otherwise")]
-        )
-
-    tribunals.insert(
-        Tribunal(
-            tribunal_ref_no=data.get("tribunal_ref_no", None),
-            case_ref_no=data.get("case_ref_no", None),
-            tenant=data.get("tenant", None),
-            landlord=data.get("landlord", None),
-            address=data.get("address", None),
-            applicant=data.get("applicant", None),
-            subject=subject_of_dispute,
-            source_pdf=source_pdf,
-        )
-    )
+                    for item in download_cards:
+                        yield (main_type, dispute_type, item)
 
 
 def scrape(scrape_type):
@@ -195,62 +169,67 @@ def scrape(scrape_type):
         for county_id, county in COUNTY_ID_MAP.items():
             print(f"Processing: {county}")
             process_property(county_id)
-    else:
-        for item in get_page_items(scrape_type):
-            subject_of_dispute = item.parent.parent.parent.find_all(
-                "p", {"class": "card-list__text"}
-            )[-1].text.strip()
+    elif scrape_type == 'tribunal_and_determination':
+        for _, subject_of_dispute, item in get_page_items():
 
-            url = item.parent.parent.get("href")
+            for link in item.find_all("a"):
 
-            filename = url.split("/")[-1]
+                url = link["href"]
 
-            scrapers = {
-                "determination": determinations,
-                "tribunal": tribunals,
-            }
-            scraper = scrapers[scrape_type]
-            if scraper.exists(source_pdf=filename):
-                continue
+                filename = url.split("/")[-1]
 
-            original_pdf = Path(os.path.join(SAVE_DIRS[scrape_type], filename))
-            computed_text_pdf = original_pdf.with_suffix(".txt.pdf")
-            raw_text_path = computed_text_pdf.with_name(computed_text_pdf.name + ".txt")
-
-            if not os.path.exists(raw_text_path):
-                download_file(url, original_pdf)
-                if not os.path.exists(original_pdf):
-                    print(f"Does not exist: {original_pdf}")
+                if tribunals.exists(source_pdf=filename) or determinations.exists(
+                    source_pdf=filename
+                ):
                     continue
 
-            _ocrmypdf(original_pdf, computed_text_pdf, raw_text_path)
-
-            if scrape_type == 'determination':
-                process_determination(filename, raw_text_path, subject_of_dispute)
-            elif scrape_type == "tribunal":
-                process_tribunal(
-                    original_pdf, raw_text_path, subject_of_dispute, filename
+                original_pdf = Path(
+                    os.path.join(RTB_TRIBUNAL_AND_DETERMINATION_DIR, filename)
                 )
-            else:
-                print(f"Unknown scrape_type: {scrape_type}")
+                computed_text_pdf = original_pdf.with_suffix(".txt.pdf")
+                raw_text_path = computed_text_pdf.with_name(
+                    computed_text_pdf.name + ".txt"
+                )
 
-            for path in (original_pdf, computed_text_pdf):
-                if os.path.exists(path):
-                    os.remove(path)
+                if not os.path.exists(raw_text_path):
+                    download_file(url, original_pdf)
+                    if not os.path.exists(original_pdf):
+                        print(f"Does not exist: {original_pdf}")
+                        continue
 
-            # Be kind, be patient
-            time.sleep(5)
+                _ocrmypdf(original_pdf, computed_text_pdf, raw_text_path)
+
+                if not os.path.exists(raw_text_path):
+                    print(f"Text path does not exist: {raw_text_path}")
+                    continue
+
+                determination_or_tribunal = is_determination_or_tribunal(raw_text_path)
+                if determination_or_tribunal == "tribunal":
+                    process_tribunal(
+                        original_pdf, raw_text_path, subject_of_dispute, filename
+                    )
+                elif determination_or_tribunal == 'determination':
+                    process_determination(
+                        filename, raw_text_path, subject_of_dispute
+                    )
+                else:
+                    print(f'Not a tribunal or determination: {raw_text_path}')
+                    continue
+
+                for path in (original_pdf, computed_text_pdf):
+                    if os.path.exists(path):
+                        os.remove(path)
 
 
 def main():
 
     parser = argparse.ArgumentParser(
-        description="Scrape RTB Determination, Tribunal Orders, or property"
+        description="Scrape RTB determinations, tribunal orders, or property registrations"
     )
     parser.add_argument(
         "type",
-        choices=["determination", "tribunal", "property"],
-        help="Type of data to scrape: 'determination', 'tribunal', or 'property'",
+        choices=["tribunal_and_determination", "property"],
+        help="Type of data to scrape: 'tribunal_and_determination', or 'property'",
     )
 
     args = parser.parse_args()

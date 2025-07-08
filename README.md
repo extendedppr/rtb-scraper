@@ -14,7 +14,7 @@ It will take a while to download but just put it on a box and leave it be (tribu
 The registered property data does not include properties that have been taken off the RTB. With frequent scraping you can track but you can't go back in time.
 
 ```bash
-poetry run scrape property  # choices are: property / tribunal / determination
+poetry run scrape property  # choices are: property / tribunal_and_determination
 ```
 
 

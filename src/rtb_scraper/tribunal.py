@@ -1,9 +1,41 @@
+import copy
 from typing import Iterable, List
 
 from peewee import Model, CharField, SqliteDatabase
 
 from rtb_scraper.settings import DB_LOCATION
-from rtb_scraper.utils import clean_string
+from rtb_scraper.utils import clean_string, remove_double_spaces
+from rtb_scraper.constants import GENERAL_REPLACE_TEXT, TRIBUNAL_REGEXES
+
+
+def extract_tribunal_data_from_text(text):
+    clean_text = copy.copy(text)
+    for to_replace, replacement in GENERAL_REPLACE_TEXT:
+        clean_text = clean_text.replace(to_replace, replacement)
+    clean_text = remove_double_spaces(clean_text)
+
+    data = {}
+    for regex in TRIBUNAL_REGEXES:
+        if match := regex.search(clean_text):
+            match_data = {k: clean_string(v) for k, v in match.groupdict().items()}
+            data.update(match_data)
+
+    # Names often are like "First Last ("
+    # Names often are like "First O' Last"
+
+    def clean_field(data, field, keywords):
+        for keyword in keywords:
+            value = data.get(field, "")
+            if keyword in value:
+                data[field] = clean_string(value[: value.find(keyword)])
+                break
+
+    clean_field(
+        data, "landlord", ["Applicant", "Receiver", "(Acting", "(acting", "acting"]
+    )
+    clean_field(data, "tenant", ["(otherwise"])
+
+    return data
 
 
 class Tribunal(Model):
@@ -46,9 +78,7 @@ class TribunalDB:
         return Tribunal.select().count()
 
     def __iter__(self) -> Iterable[Tribunal]:
-        for chunk in Tribunal.select().chunk(100):
-            for tribunal in chunk:
-                yield tribunal
+        return Tribunal.select().iterator(chunk_size=100)
 
     def drop_data(self) -> None:
         Tribunal.delete().execute()

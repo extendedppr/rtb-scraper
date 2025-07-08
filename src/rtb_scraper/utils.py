@@ -9,7 +9,7 @@ import ocrmypdf
 import fitz
 
 
-def clean_string(s) -> str | None:
+def clean_string(s) -> str:
     """
     Generic clean a messy string up
 

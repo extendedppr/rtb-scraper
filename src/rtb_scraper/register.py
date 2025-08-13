@@ -164,7 +164,7 @@ class RegisterDB:
 
         if address:
             address = address.replace(" ", "").replace(",", "").lower()
-            query = query.where(RegisterObject.searchable_address.like(f"%{address}%"))
+            query = query.where(RegisterObject.searchable_address.contains(address))
 
         objs = [obj for obj in query]
 

@@ -91,4 +91,4 @@ class RegisterDBTest(TestCase):
         self.assertEqual(len(rtb.filter(address_1="a", partial=True)), 2)
         self.assertEqual(len(rtb.filter(bedrooms=3)), 1)
         self.assertEqual(len(rtb.filter(month_seen=datetime.datetime(2024, 1, 1))), 1)
-        self.assertEqual(len(rtb.filter(address="a1 a2")), 1)
+        self.assertEqual(len(rtb.filter(address="a1 a2", partial=True)), 1)

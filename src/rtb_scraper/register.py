@@ -24,15 +24,25 @@ class RegisterObject(Model):
     county = CharField()
     bedrooms = IntegerField(null=True)
     month_seen = DateTimeField(null=True, default=None)
+    searchable_address = CharField()
 
     class Meta:
         database = SqliteDatabase(DB_LOCATION)
+
+    def save(self, *args, **kwargs):
+        self.searchable_address = self.compute_searchable_address()
+        print(f"Searchable: {self.searchable_address}")
+        return super(RegisterObject, self).save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.__repr__()
 
     def __repr__(self) -> str:
-        return f'RegisterObject(address_1="{self.address_1}", address_2="{self.address_2}", address_3="{self.address_3}", address_4="{self.address_4}", address_5="{self.address_5}", eircode="{self.eircode}", county="{self.county}", bedrooms="{self.bedrooms}", month_seen="{self.month_seen}")'
+        return f'RegisterObject(address_1="{self.address_1}", address_2="{self.address_2}", address_3="{self.address_3}", address_4="{self.address_4}", address_5="{self.address_5}", eircode="{self.eircode}", county="{self.county}", bedrooms="{self.bedrooms}", month_seen="{self.month_seen}", searchable_address="{self.compute_searchable_address()}")'
+
+    def compute_searchable_address(self) -> str:
+        print(self.address)
+        return self.address.replace(" ", "").replace(",", "").lower()
 
     @property
     def address(self) -> str:
@@ -47,7 +57,6 @@ class RegisterObject(Model):
 
 
 class RegisterDB:
-
     def __init__(self) -> None:
         self.create_connection()
 
@@ -75,7 +84,6 @@ class RegisterDB:
         address_5: Optional[Union[str, CharField]] = None,
         month_seen: Optional[Union[str, CharField]] = None,
     ) -> bool:
-
         if eircode and month_seen:
             return (
                 RegisterObject.select()
@@ -100,7 +108,6 @@ class RegisterDB:
         )
 
     def insert(self, rtb_obj: RegisterObject) -> None:
-
         if self.exists(
             address_1=rtb_obj.address_1,
             address_2=rtb_obj.address_2,
@@ -156,21 +163,8 @@ class RegisterDB:
                     query = query.where(field_name.ilike(value))
 
         if address:
-            # Squish to ignore punctuation
             address = address.replace(" ", "").replace(",", "").lower()
-
-            # Always assumes partial
-            query = RegisterObject.select().where(
-                fn.LOWER(
-                    SQL(
-                        "COALESCE(REPLACE(REPLACE(address_1, ' ', ''), ',', ''), '') || "
-                        "COALESCE(REPLACE(REPLACE(address_2, ' ', ''), ',', ''), '') || "
-                        "COALESCE(REPLACE(REPLACE(address_3, ' ', ''), ',', ''), '') || "
-                        "COALESCE(REPLACE(REPLACE(address_4, ' ', ''), ',', ''), '') || "
-                        "COALESCE(REPLACE(REPLACE(address_5, ' ', ''), ',', ''), '')"
-                    ),
-                ).contains(address)
-            )
+            query = query.where(RegisterObject.searchable_address.ilike(f"%{address}%"))
 
         objs = [obj for obj in query]
 

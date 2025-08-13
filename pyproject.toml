@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rtb-scraper"
-version = "0.0.3"
+version = "0.0.4"
 description = "Scrape RTB disputes and properties"
 authors = ["ExtendedPPR <extendedppr@gmail.com>"]
 readme = "README.md"

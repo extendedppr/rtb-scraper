@@ -31,7 +31,6 @@ class RegisterObject(Model):
 
     def save(self, *args, **kwargs):
         self.searchable_address = self.compute_searchable_address()
-        print(f"Searchable: {self.searchable_address}")
         return super(RegisterObject, self).save(*args, **kwargs)
 
     def __str__(self) -> str:

@@ -40,7 +40,6 @@ class RegisterObject(Model):
         return f'RegisterObject(address_1="{self.address_1}", address_2="{self.address_2}", address_3="{self.address_3}", address_4="{self.address_4}", address_5="{self.address_5}", eircode="{self.eircode}", county="{self.county}", bedrooms="{self.bedrooms}", month_seen="{self.month_seen}", searchable_address="{self.compute_searchable_address()}")'
 
     def compute_searchable_address(self) -> str:
-        print(self.address)
         return self.address.replace(" ", "").replace(",", "").lower()
 
     @property

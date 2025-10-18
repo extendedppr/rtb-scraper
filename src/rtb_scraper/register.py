@@ -28,6 +28,7 @@ class RegisterObject(Model):
 
     class Meta:
         database = SqliteDatabase(DB_LOCATION)
+        indexes = ((("searchable_address", "eircode", "month_seen"), True),)
 
     def save(self, *args, **kwargs):
         self.searchable_address = self.compute_searchable_address()

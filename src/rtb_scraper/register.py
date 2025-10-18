@@ -6,8 +6,6 @@ from peewee import (
     IntegerField,
     DateTimeField,
     SqliteDatabase,
-    fn,
-    SQL,
 )
 
 from rtb_scraper.settings import DB_LOCATION

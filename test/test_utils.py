@@ -1,5 +1,3 @@
-import os
-from datetime import datetime
 
 from unittest import TestCase
 
@@ -7,7 +5,6 @@ from rtb_scraper.utils import (
     clean_string,
     remove_brackets_and_contents,
     removeprefix,
-    is_determination_or_tribunal,
     remove_double_spaces,
 )
 

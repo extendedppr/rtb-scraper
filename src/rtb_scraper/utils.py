@@ -74,7 +74,6 @@ def _ocrmypdf(original_pdf, computed_text_pdf, raw_text_path):
         return
 
     if not os.path.exists(raw_text_path):
-
         try:
             ocrmypdf.ocr(
                 original_pdf,
@@ -119,7 +118,6 @@ def is_determination_or_tribunal(fp) -> str:
 
 
 def get_post_data(year, dispute_type, main_type, page_no):
-
     return {
         "action": "facetwp_refresh",
         "data": {

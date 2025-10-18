@@ -15,7 +15,6 @@ from rtb_scraper.utils import clean_string, remove_brackets_and_contents, remove
 
 
 def extract_determination_data_from_text(text: str, source_pdf: str) -> Dict[str, str]:
-
     for to_replace, replacement in GENERAL_REPLACE_TEXT:
         text = text.replace(to_replace, replacement)
 
@@ -46,7 +45,6 @@ def extract_determination_data_from_text(text: str, source_pdf: str) -> Dict[str
                         remove_brackets_and_contents(address)
                     )
                 else:
-
                     # Split into start and end and if it matches start then remove the starting things
                     if smaller_match := re.search(
                         start_address_match + "(.*)", match.group(1)
@@ -69,7 +67,6 @@ def extract_determination_data_from_text(text: str, source_pdf: str) -> Dict[str
                     extracted_data[key] = None
 
     if extracted_data.get("order_date"):
-
         for to_replace, replacement in DETERMINATION_ORDER_DATE_REPLACEMENTS:
             extracted_data["order_date"] = extracted_data["order_date"].replace(
                 to_replace, replacement
@@ -121,7 +118,6 @@ class Determination(Model):
 
 
 class DeterminationDB:
-
     def __init__(self) -> None:
         self.create_connection()
 
@@ -152,7 +148,6 @@ class DeterminationDB:
         source_pdf=None,
         partial=False,
     ) -> List[Determination]:
-
         filters = {
             "address": address.upper() if address else None,
             "applicant_landlord": (

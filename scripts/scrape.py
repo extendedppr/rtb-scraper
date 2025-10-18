@@ -17,7 +17,7 @@ from rtb_scraper.constants import (
     DISPUTE_TYPES,
     COUNTY_ID_MAP,
     PROPERTY_COUNTY_URL,
-    POST_HEADERS
+    POST_HEADERS,
 )
 
 from rtb_scraper.utils import (
@@ -25,7 +25,7 @@ from rtb_scraper.utils import (
     _ocrmypdf,
     is_determination_or_tribunal,
     get_post_data,
-    read_file
+    read_file,
 )
 
 from rtb_scraper.tribunal import (
@@ -68,7 +68,6 @@ def process_tribunal(fp, raw_text_path, subject_of_dispute, source_pdf):
 
 
 def process_determination(source_pdf, raw_text_path, subject):
-
     text = read_file(raw_text_path)
 
     extracted_data = extract_determination_data_from_text(text, source_pdf=source_pdf)
@@ -99,7 +98,6 @@ def process_property(county_id):
     )
 
     for prop in progressbar.progressbar(data):
-
         # Happened at some point somehow
         if "AddressLinne2" in prop:
             prop["AddressLine2"] = prop["AddressLinne2"]
@@ -131,22 +129,23 @@ def get_page_items():
     bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
 
     for main_type in MAIN_TYPES:
-        print(f'\nStart scraping: {main_type}')
+        print(f"\nStart scraping: {main_type}")
 
         for dispute_type in DISPUTE_TYPES:
-            print(f'\nDispute type: {dispute_type}')
+            print(f"\nDispute type: {dispute_type}")
 
             for year in list(range(2015, datetime.datetime.now().year + 1)):
-                print(f'\nYear: {year}')
+                print(f"\nYear: {year}")
 
                 # Arbitrary 500 since it breaks before it gets to it
                 for idx, page_no in enumerate(range(1, 500)):
-
                     bar.update(idx)
 
                     data = get_post_data(year, dispute_type, main_type, page_no)
 
-                    response = requests.post(RTB_REFRESH_URL, headers=POST_HEADERS, json=data)
+                    response = requests.post(
+                        RTB_REFRESH_URL, headers=POST_HEADERS, json=data
+                    )
 
                     data = response.json()
                     soup = BeautifulSoup(data["template"], "html.parser")
@@ -166,14 +165,16 @@ def get_page_items():
 
 def scrape(scrape_type):
     if scrape_type == "property":
+        start = False
         for county_id, county in COUNTY_ID_MAP.items():
-            print(f"Processing: {county}")
-            process_property(county_id)
-    elif scrape_type == 'tribunal_and_determination':
+            if county == "Laois":
+                start = True
+            if start:
+                print(f"Processing: {county}")
+                process_property(county_id)
+    elif scrape_type == "tribunal_and_determination":
         for _, subject_of_dispute, item in get_page_items():
-
             for link in item.find_all("a"):
-
                 url = link["href"]
 
                 filename = url.split("/")[-1]
@@ -208,12 +209,10 @@ def scrape(scrape_type):
                     process_tribunal(
                         original_pdf, raw_text_path, subject_of_dispute, filename
                     )
-                elif determination_or_tribunal == 'determination':
-                    process_determination(
-                        filename, raw_text_path, subject_of_dispute
-                    )
+                elif determination_or_tribunal == "determination":
+                    process_determination(filename, raw_text_path, subject_of_dispute)
                 else:
-                    print(f'Not a tribunal or determination: {raw_text_path}')
+                    print(f"Not a tribunal or determination: {raw_text_path}")
                     continue
 
                 for path in (original_pdf, computed_text_pdf):
@@ -222,7 +221,6 @@ def scrape(scrape_type):
 
 
 def main():
-
     parser = argparse.ArgumentParser(
         description="Scrape RTB determinations, tribunal orders, or property registrations"
     )

@@ -25,6 +25,7 @@ RTB_PROPERTY_DIR = os.path.join(DATA_LOCATION, "rtb_property")
 
 DB_LOCATION = os.path.join(DATA_LOCATION, "db.sqlite3")
 
+
 os.makedirs(DATA_LOCATION, exist_ok=True)
 os.makedirs(RTB_TRIBUNAL_AND_DETERMINATION_DIR, exist_ok=True)
 os.makedirs(RTB_PROPERTY_DIR, exist_ok=True)

@@ -39,7 +39,6 @@ def extract_tribunal_data_from_text(text):
 
 
 class Tribunal(Model):
-
     tribunal_ref_no = CharField(null=True)
     case_ref_no = CharField(null=True)
     tenant = CharField(null=True)
@@ -70,7 +69,6 @@ class Tribunal(Model):
 
 
 class TribunalDB:
-
     def __init__(self) -> None:
         self.create_connection()
 
@@ -100,7 +98,6 @@ class TribunalDB:
         source_pdf=None,
         partial=False,
     ) -> list:
-
         filters = {
             "tribunal_ref_no": tribunal_ref_no.upper() if tribunal_ref_no else None,
             "case_ref_no": case_ref_no.upper() if case_ref_no else None,

@@ -165,13 +165,9 @@ def get_page_items():
 
 def scrape(scrape_type):
     if scrape_type == "property":
-        start = False
         for county_id, county in COUNTY_ID_MAP.items():
-            if county == "Laois":
-                start = True
-            if start:
-                print(f"Processing: {county}")
-                process_property(county_id)
+            print(f"Processing: {county}")
+            process_property(county_id)
     elif scrape_type == "tribunal_and_determination":
         for _, subject_of_dispute, item in get_page_items():
             for link in item.find_all("a"):

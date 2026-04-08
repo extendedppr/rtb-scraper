@@ -1,4 +1,3 @@
-
 from unittest import TestCase
 
 from rtb_scraper.utils import (
@@ -10,7 +9,6 @@ from rtb_scraper.utils import (
 
 
 class UtilsTest(TestCase):
-
     def test_clean_string(self):
         self.assertEqual(clean_string(""), "")
         self.assertEqual(clean_string("  "), "")

@@ -1,6 +1,6 @@
 import re
 import datetime
-from typing import Iterable, List, Dict
+from typing import Iterable, List, Dict, Optional
 
 from peewee import Model, CharField, SqliteDatabase, DateTimeField
 
@@ -147,6 +147,7 @@ class DeterminationDB:
         subject=None,
         source_pdf=None,
         partial=False,
+        exclude_address_substrs: Optional[List[str]] = None,
     ) -> List[Determination]:
         filters = {
             "address": address.upper() if address else None,
@@ -174,6 +175,10 @@ class DeterminationDB:
                     query = query.where(field_name.ilike(f"%{value}%"))
                 else:
                     query = query.where(field_name.ilike(value))
+
+        if exclude_address_substrs:
+            for exclude in exclude_address_substrs:
+                query = query.where(~Determination.address.contains(exclude))
 
         return [determination for determination in query]
 

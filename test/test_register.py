@@ -6,7 +6,6 @@ from rtb_scraper.register import RegisterObject, RegisterDB
 
 
 class RegisterObjectTest(TestCase):
-
     def test_address(self):
         rtb_obj = RegisterObject(
             address_1="a1",
@@ -22,7 +21,6 @@ class RegisterObjectTest(TestCase):
 
 
 class RegisterDBTest(TestCase):
-
     def setUp(self):
         rtb = RegisterDB()
         rtb.drop_data()
@@ -92,3 +90,4 @@ class RegisterDBTest(TestCase):
         self.assertEqual(len(rtb.filter(bedrooms=3)), 1)
         self.assertEqual(len(rtb.filter(month_seen=datetime.datetime(2024, 1, 1))), 1)
         self.assertEqual(len(rtb.filter(address="a1 a2", partial=True)), 1)
+        self.assertEqual(len(rtb.filter(exclude_address_substrs=["a01"])), 1)

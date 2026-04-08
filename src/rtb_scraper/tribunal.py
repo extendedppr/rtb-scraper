@@ -1,5 +1,5 @@
 import copy
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from peewee import Model, CharField, SqliteDatabase
 
@@ -97,6 +97,7 @@ class TribunalDB:
         subject=None,
         source_pdf=None,
         partial=False,
+        exclude_address_substrs: Optional[List[str]] = None,
     ) -> list:
         filters = {
             "tribunal_ref_no": tribunal_ref_no.upper() if tribunal_ref_no else None,
@@ -118,6 +119,10 @@ class TribunalDB:
                     query = query.where(field_name.ilike(f"%{value}%"))
                 else:
                     query = query.where(field_name.ilike(value))
+
+        if exclude_address_substrs:
+            for exclude in exclude_address_substrs:
+                query = query.where(~Tribunal.address.contains(exclude))
 
         return [tribunal for tribunal in query]
 

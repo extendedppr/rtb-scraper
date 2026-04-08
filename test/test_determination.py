@@ -11,7 +11,6 @@ from rtb_scraper.determination import (
 
 
 class DeterminationTest(TestCase):
-
     def test_extract_determination_data_from_text_order_date(self):
         data = [
             (
@@ -37,7 +36,6 @@ x
             )
 
     def test_extract_determination_data_from_text_address(self):
-
         data = [
             (
                 """Residential Tenancies Act 2004, determines that:
@@ -295,7 +293,6 @@ This Order was made by the Residential Tenancies Board on 15 November 2023.""",
 
 
 class DeterminationDBTest(TestCase):
-
     def setUp(self):
         determination_db = DeterminationDB()
         determination_db.drop_data()
@@ -359,5 +356,14 @@ class DeterminationDBTest(TestCase):
 
         self.assertEqual(
             len(determination_db.filter(order_date=datetime(2024, 1, 1), partial=True)),
+            1,
+        )
+
+        self.assertEqual(
+            len(
+                determination_db.filter(
+                    exclude_address_substrs=["somewhere"], partial=False
+                )
+            ),
             1,
         )

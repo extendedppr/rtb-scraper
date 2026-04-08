@@ -136,6 +136,7 @@ class RegisterDB:
         bedrooms: Optional[int] = None,
         partial: bool = False,
         collapse: bool = True,
+        exclude_address_substrs: Optional[List[str]] = None,
     ) -> List[RegisterObject]:
         filters = {
             "eircode": eircode if eircode else None,
@@ -165,6 +166,12 @@ class RegisterDB:
                 query = query.where(RegisterObject.searchable_address.contains(address))
             else:
                 query = query.where(RegisterObject.searchable_address == address)
+
+        if exclude_address_substrs:
+            for exclude in exclude_address_substrs:
+                query = query.where(
+                    ~RegisterObject.searchable_address.contains(exclude)
+                )
 
         objs = [obj for obj in query]
 

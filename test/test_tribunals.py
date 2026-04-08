@@ -5,7 +5,6 @@ from rtb_scraper.tribunal import Tribunal, TribunalDB, extract_tribunal_data_fro
 
 
 class TribunalUtil(TestCase):
-
     def test_extract_data_from_text(self):
         # TODO: find an applicant tenant
 
@@ -47,7 +46,6 @@ class TribunalUtil(TestCase):
 
 
 class TribunalTest(TestCase):
-
     def test_repr(self):
         tribunal_obj = Tribunal(
             tribunal_ref_no="tribunal_ref_no",
@@ -66,7 +64,6 @@ class TribunalTest(TestCase):
 
 
 class TribunalDBTest(TestCase):
-
     def setUp(self):
         tribunal_db = TribunalDB()
         tribunal_db.drop_data()
@@ -115,3 +112,4 @@ class TribunalDBTest(TestCase):
         self.assertEqual(len(tribunal_db.filter()), 2)
         self.assertEqual(len(tribunal_db.filter(tribunal_ref_no="1111")), 1)
         self.assertEqual(len(tribunal_db.filter(tribunal_ref_no="111")), 0)
+        self.assertEqual(len(tribunal_db.filter(exclude_address_substrs=["15a"])), 1)

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rtb-scraper"
-version = "0.0.10"
+version = "0.0.11"
 description = "Scrape RTB disputes and properties"
 authors = ["ExtendedPPR <extendedppr@gmail.com>"]
 readme = "README.md"
@@ -15,6 +15,7 @@ peewee = "4.0.4"
 orjson = "3.11.8"
 progressbar2 = "4.5.0"
 ocrmypdf = "16.13.0"
+pymupdf = "1.27.2.3"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.2.0"

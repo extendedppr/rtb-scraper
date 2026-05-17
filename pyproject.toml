@@ -1,22 +1,20 @@
 [tool.poetry]
 name = "rtb-scraper"
-version = "0.0.9"
+version = "0.0.10"
 description = "Scrape RTB disputes and properties"
 authors = ["ExtendedPPR <extendedppr@gmail.com>"]
 readme = "README.md"
 packages = [{include="rtb_scraper", from="src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.12"
-requests = "2.32.3"
-bs4 = "0.0.2"
-beautifulsoup4 = "4.13.4"
+python = ">=3.10,<3.12"
+requests = "2.33.1"
+beautifulsoup4 = "4.14.3"
 backoff = "2.2.1"
-pymupdf = "1.25.5"
-peewee = "3.17.9"
-orjson = "3.10.16"
+peewee = "4.0.4"
+orjson = "3.11.8"
 progressbar2 = "4.5.0"
-ocrmypdf = "15.4.4"
+ocrmypdf = "16.13.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.2.0"

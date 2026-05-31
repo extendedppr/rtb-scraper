@@ -38,6 +38,7 @@ class RegisterDBTest(TestCase):
                 eircode="D01AAAA",
                 county="dublin",
                 bedrooms=2,
+                month_seen=datetime.datetime(2024, 1, 1),
             )
         )
         self.assertEqual(len(rtb), 1)
@@ -51,6 +52,7 @@ class RegisterDBTest(TestCase):
                 eircode="D01AAAA",
                 county="dublin",
                 bedrooms=2,
+                month_seen=datetime.datetime(2024, 1, 1),
             )
         )
         self.assertEqual(len(rtb), 1)

@@ -1,6 +1,7 @@
 from typing import Iterable, List, Optional, Union
 
 from peewee import (
+    IntegrityError,
     Model,
     CharField,
     IntegerField,
@@ -105,22 +106,14 @@ class RegisterDB:
         )
 
     def insert(self, rtb_obj: RegisterObject) -> None:
-        if self.exists(
-            address_1=rtb_obj.address_1,
-            address_2=rtb_obj.address_2,
-            address_3=rtb_obj.address_3,
-            address_4=rtb_obj.address_4,
-            address_5=rtb_obj.address_5,
-            month_seen=rtb_obj.month_seen,
-            eircode=rtb_obj.eircode,
-        ):
-            return
-
         if rtb_obj.eircode:
             if not EIRCODE_PATTERN.match(str(rtb_obj.eircode)):
                 print(f"Bad eircode: {rtb_obj.eircode}")
 
-        rtb_obj.save()
+        try:
+            rtb_obj.save()
+        except IntegrityError:
+            pass
 
     def filter(
         self,

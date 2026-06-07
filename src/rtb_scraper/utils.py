@@ -18,6 +18,7 @@ def clean_string(s) -> str:
     if s is None:
         return None
     s = s.lstrip(":")
+    s = s.replace(",", ",  ")
     s = re.sub(r"\s*[,.]+\s*$", "", s)
     s = re.sub(r"\s*([,.:;!?])", r"\1", s)
     s = remove_double_spaces(s)

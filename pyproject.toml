@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "rtb-scraper"
-version = "0.0.12"
+version = "0.0.13"
 description = "Scrape RTB disputes and properties"
 authors = ["ExtendedPPR <extendedppr@gmail.com>"]
 readme = "README.md"
 packages = [{include="rtb_scraper", from="src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.10,<3.14"
 requests = "2.33.1"
 beautifulsoup4 = "4.14.3"
 backoff = "2.2.1"
@@ -20,6 +20,10 @@ pymupdf = "1.27.2.3"
 [tool.poetry.group.test.dependencies]
 pytest = "^8.2.0"
 mock = "*"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest-cov = "^7.1.0"
 
 [build-system]
 requires = ["poetry-core"]

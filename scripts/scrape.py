@@ -87,16 +87,52 @@ def process_determination(source_pdf, raw_text_path, subject):
     )
 
 
-def process_property(county_id):
-    url = PROPERTY_COUNTY_URL.format(county_id=county_id)
+def legacy_counties():
+    response = requests.get(
+        "https://ctrapi.rtb.ie/api/Address/GetCountyList", timeout=60
+    )
+    response.raise_for_status()
+    # Dublin postal districts are separate entries in this API.
+    return [row["New_name"] for row in response.json()]
 
-    resp = requests.get(url, timeout=60 * 10)
-    data = json.loads(resp.json())
+
+def process_property(county_id, source="portal"):
+    if source == "legacy":
+        url = "https://ctrapi.rtb.ie/api/Address/GetByCounty"
+        county = COUNTY_ID_MAP.get(county_id, county_id)
+        resp = requests.get(url, params={"County": county}, timeout=60 * 10)
+    elif source == "portal":
+        url = PROPERTY_COUNTY_URL.format(county_id=county_id)
+        resp = requests.get(url, timeout=60 * 10)
+    else:
+        raise ValueError(f"Unknown property source: {source}")
+
+    resp.raise_for_status()
+    data = resp.json()
+    if isinstance(data, str):
+        data = json.loads(data)
+    if (
+        not isinstance(data, list)
+        or not data
+        or not all(isinstance(row, dict) for row in data)
+    ):
+        raise ValueError("RTB returned an empty or invalid county dataset")
+
+    if source == "legacy":
+        for row in data:
+            row["NoOfBedrooms"] = row["NumBedrooms"] or None
 
     current_month = datetime.datetime.today().replace(
         day=1, hour=0, minute=0, second=0, microsecond=0
     )
 
+    register.insert_many(property_objects(data, current_month))
+
+    # Be kind, be patient
+    time.sleep(30)
+
+
+def property_objects(data, current_month):
     for prop in progressbar.progressbar(data):
         # Happened at some point somehow
         if "AddressLinne2" in prop:
@@ -115,16 +151,13 @@ def process_property(county_id):
                 month_seen=current_month,
             )
         except KeyError:
-            print(f"Failed to set RegisterObject with data: {data}")
+            print(f"Failed to set RegisterObject with data: {prop}")
         else:
-            register.insert(rtb_obj)
-
-    # Be kind, be patient
-    time.sleep(30)
+            yield rtb_obj
 
 
 def get_page_items():
-    print("Cannot give ETA. Just wait a day or two")
+    print("Cannot give ETA")
 
     bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
 
@@ -163,11 +196,19 @@ def get_page_items():
                         yield (main_type, dispute_type, item)
 
 
-def scrape(scrape_type):
+def scrape(scrape_type, property_source="portal"):
     if scrape_type == "property":
-        for county_id, county in COUNTY_ID_MAP.items():
+        if property_source == "legacy":
+            print(
+                "WARNING: legacy RTB data; freshness and completeness are unverified. "
+                "month_seen records retrieval month, not confirmed registration currency."
+            )
+            counties = [(name, name) for name in legacy_counties()]
+        else:
+            counties = COUNTY_ID_MAP.items()
+        for county_id, county in counties:
             print(f"Processing: {county}")
-            process_property(county_id)
+            process_property(county_id, source=property_source)
     elif scrape_type == "tribunal_and_determination":
         for _, subject_of_dispute, item in get_page_items():
             for link in item.find_all("a"):
@@ -226,9 +267,15 @@ def main():
         help="Type of data to scrape: 'tribunal_and_determination', or 'property'",
     )
 
+    parser.add_argument(
+        "--property-source",
+        choices=["portal", "legacy"],
+        default="portal",
+        help="County API to use (legacy data freshness and completeness are unverified)",
+    )
     args = parser.parse_args()
 
-    scrape(args.type)
+    scrape(args.type, property_source=args.property_source)
 
 
 if __name__ == "__main__":

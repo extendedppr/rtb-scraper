@@ -7,6 +7,7 @@ from peewee import (
     IntegerField,
     DateTimeField,
     SqliteDatabase,
+    chunked,
 )
 
 from rtb_scraper.settings import DB_LOCATION
@@ -68,8 +69,8 @@ class RegisterDB:
         RegisterObject.delete().execute()
 
     def create_connection(self) -> None:
-        db = SqliteDatabase(DB_LOCATION)
-        db.connect()
+        db = RegisterObject._meta.database
+        db.connect(reuse_if_open=True)
         db.create_tables([RegisterObject])
 
     def exists(
@@ -106,14 +107,39 @@ class RegisterDB:
         )
 
     def insert(self, rtb_obj: RegisterObject) -> None:
-        if rtb_obj.eircode:
-            if not EIRCODE_PATTERN.match(str(rtb_obj.eircode)):
-                print(f"Bad eircode: {rtb_obj.eircode}")
+        self._validate_eircode(rtb_obj)
 
         try:
             rtb_obj.save()
         except IntegrityError:
             pass
+
+    @staticmethod
+    def _validate_eircode(rtb_obj: RegisterObject) -> None:
+        if rtb_obj.eircode:
+            if not EIRCODE_PATTERN.match(str(rtb_obj.eircode)):
+                print(f"Bad eircode: {rtb_obj.eircode}")
+
+    def insert_many(self, objects: Iterable[RegisterObject]) -> None:
+        fields = [
+            field
+            for field in RegisterObject._meta.sorted_fields
+            if field is not RegisterObject._meta.primary_key
+        ]
+        batch_size = 999 // len(fields)
+        db = RegisterObject._meta.database
+        for batch in chunked(objects, batch_size):
+            rows = []
+            for obj in batch:
+                self._validate_eircode(obj)
+                obj.searchable_address = obj.compute_searchable_address()
+                rows.append([getattr(obj, field.name) for field in fields])
+            with db.atomic():
+                (
+                    RegisterObject.insert_many(rows, fields=fields)
+                    .on_conflict_ignore()
+                    .execute()
+                )
 
     def filter(
         self,

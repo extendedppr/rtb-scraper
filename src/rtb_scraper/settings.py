@@ -1,5 +1,6 @@
 import sys
 import os
+from pathlib import Path
 
 
 TEST_ENV = False
@@ -7,12 +8,22 @@ if "pytest" in sys.modules:
     TEST_ENV = True
 
 LOG_LOCATION = (
-    "/var/log/rtb_scraper/rtb_scraper.log"
+    str(
+        Path(os.getenv("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+        / "rtb-scraper"
+        / "rtb_scraper.log"
+    )
     if not TEST_ENV
     else "/tmp/log/rtb_scraper/rtb_scraper.log"
 )
 DATA_LOCATION = (
-    os.getenv("RTB_DATA_LOCATION", "/var/lib/rtb")
+    (
+        os.getenv("RTB_DATA_LOCATION")
+        or str(
+            Path(os.getenv("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+            / "rtb-scraper"
+        )
+    )
     if not TEST_ENV
     else "/tmp/var/lib/rtb_scraper/"
 )

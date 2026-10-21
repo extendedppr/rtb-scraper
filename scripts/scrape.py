@@ -100,14 +100,27 @@ def process_property(county_id, source="portal"):
     if source == "legacy":
         url = "https://ctrapi.rtb.ie/api/Address/GetByCounty"
         county = COUNTY_ID_MAP.get(county_id, county_id)
-        resp = requests.get(url, params={"County": county}, timeout=60 * 10)
+        request_kwargs = {"params": {"County": county}, "timeout": 60 * 10}
     elif source == "portal":
         url = PROPERTY_COUNTY_URL.format(county_id=county_id)
-        resp = requests.get(url, timeout=60 * 10)
+        request_kwargs = {"timeout": 60 * 10}
     else:
         raise ValueError(f"Unknown property source: {source}")
 
-    resp.raise_for_status()
+    while True:
+        try:
+            resp = requests.get(url, **request_kwargs)
+            resp.raise_for_status()
+            break
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            print(f"County request failed: {exc}. Retrying in 5 seconds...")
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status != 429 and (status is None or status < 500):
+                raise
+            print(f"County request failed: {exc}. Retrying in 5 seconds...")
+        time.sleep(5)
+
     data = resp.json()
     if isinstance(data, str):
         data = json.loads(data)

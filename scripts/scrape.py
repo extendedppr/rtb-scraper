@@ -3,6 +3,8 @@ import datetime
 import json
 import argparse
 import time
+import sys
+import traceback
 from pathlib import Path
 
 import progressbar
@@ -10,7 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from rtb_scraper.register import register, RegisterObject
-from rtb_scraper.settings import RTB_TRIBUNAL_AND_DETERMINATION_DIR
+from rtb_scraper.settings import LOG_LOCATION, RTB_TRIBUNAL_AND_DETERMINATION_DIR
 from rtb_scraper.constants import (
     RTB_REFRESH_URL,
     MAIN_TYPES,
@@ -185,16 +187,21 @@ def get_page_items():
 
                 # Arbitrary 500 since it breaks before it gets to it
                 for idx, page_no in enumerate(range(1, 500)):
-                    bar.update(idx)
-
                     data = get_post_data(year, dispute_type, main_type, page_no)
+                    try:
+                        response = requests.post(
+                            RTB_REFRESH_URL, headers=POST_HEADERS, json=data, timeout=60
+                        )
+                        response.raise_for_status()
+                        template = response.json()["template"]
+                    except Exception as exc:
+                        raise RuntimeError(
+                            f"Listing failed: {main_type}, {dispute_type}, "
+                            f"year {year}, page {page_no}: {exc}"
+                        ) from exc
 
-                    response = requests.post(
-                        RTB_REFRESH_URL, headers=POST_HEADERS, json=data
-                    )
-
-                    data = response.json()
-                    soup = BeautifulSoup(data["template"], "html.parser")
+                    bar.update(idx)
+                    soup = BeautifulSoup(template, "html.parser")
 
                     download_cards = soup.find_all("article")
 
@@ -233,6 +240,8 @@ def scrape(scrape_type, property_source="portal"):
                     source_pdf=filename
                 ):
                     continue
+
+                print(f"Processing PDF: {filename}", flush=True)
 
                 original_pdf = Path(
                     os.path.join(RTB_TRIBUNAL_AND_DETERMINATION_DIR, filename)
@@ -288,7 +297,18 @@ def main():
     )
     args = parser.parse_args()
 
-    scrape(args.type, property_source=args.property_source)
+    try:
+        scrape(args.type, property_source=args.property_source)
+    except BaseException:
+        print(file=sys.stdout, flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+        log_path = Path(LOG_LOCATION)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a") as log:
+            traceback.print_exc(file=log)
+        print(f"\nScrape failed; details saved to {log_path}", file=sys.stderr, flush=True)
+        raise
 
 
 if __name__ == "__main__":

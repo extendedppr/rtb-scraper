@@ -30,7 +30,7 @@ def clean_string(s) -> str:
 )
 def download_file(url, filepath) -> None:
     try:
-        response = requests.get(url, stream=True)
+        response = requests.get(url, stream=True, timeout=60)
         response.raise_for_status()
     except requests.exceptions.HTTPError as e:
         print(e)

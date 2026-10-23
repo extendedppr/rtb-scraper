@@ -1,5 +1,6 @@
 import os
 import re
+import tempfile
 
 from bs4 import BeautifulSoup
 import pikepdf
@@ -74,28 +75,45 @@ def _ocrmypdf(original_pdf, computed_text_pdf, raw_text_path):
         print(f"Not a pdf: {original_pdf}")
         return
 
-    if not os.path.exists(raw_text_path):
-        try:
+    try:
+        ocrmypdf.ocr(
+            original_pdf,
+            computed_text_pdf,
+            language="eng",
+            progress_bar=False,
+            deskew=True,
+        )
+    except (
+        ocrmypdf.exceptions.PriorOcrFoundError,
+        ocrmypdf.exceptions.TaggedPDFError,
+    ):
+        # Has text in it and didn't run OCR.
+        with open(raw_text_path, "w") as fh:
+            fh.write(get_text_from_text_pdf(original_pdf))
+        return
+    except ocrmypdf.exceptions.InputFileError as exc:
+        if "XMP metadata" not in str(exc.__cause__):
+            raise
+        print(f"Repairing PDF metadata: {original_pdf}", flush=True)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repaired_pdf = os.path.join(temp_dir, "repaired.pdf")
+            with pikepdf.Pdf.open(original_pdf) as pdf:
+                del pdf.Root.Metadata
+                pdf.save(repaired_pdf)
             ocrmypdf.ocr(
-                original_pdf,
+                repaired_pdf,
                 computed_text_pdf,
                 language="eng",
                 progress_bar=False,
                 deskew=True,
             )
-        except (
-            ocrmypdf.exceptions.PriorOcrFoundError,
-            ocrmypdf.exceptions.TaggedPDFError,
-        ):
-            # Has text in it and didn't run ocr
-            with open(raw_text_path, "w") as fh:
-                fh.write(get_text_from_text_pdf(original_pdf))
-        except pikepdf._core.PdfError:
-            print(f"PDF ERROR: {original_pdf}")
-        else:
-            if os.path.exists(computed_text_pdf):
-                with open(raw_text_path, "w") as fh:
-                    fh.write(get_text_from_text_pdf(computed_text_pdf))
+    except pikepdf._core.PdfError:
+        print(f"PDF ERROR: {original_pdf}")
+        return
+
+    if os.path.exists(computed_text_pdf):
+        with open(raw_text_path, "w") as fh:
+            fh.write(get_text_from_text_pdf(computed_text_pdf))
 
 
 def get_text_from_text_pdf(fp) -> str:

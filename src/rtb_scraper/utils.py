@@ -114,7 +114,15 @@ def is_determination_or_tribunal(fp) -> str:
 
     if "Report of Tribunal Reference No" in text:
         return "tribunal"
-    if "Determination Order" in text:
+
+    # Since sometimes ocr messes up
+    if any([
+        "Determination Order" in text,
+        "Dotermination Order" in text,
+        "DeterminationOrder" in text,
+        "Determination Or" in text,
+        'Ref: DR'
+    ]):
         return "determination"
 
 

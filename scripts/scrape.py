@@ -204,19 +204,28 @@ def get_page_items(processed_pdfs=None, progress=None, full_refresh=False):
                 historical = year < datetime.datetime.now().year
                 progress_key = f"{main_type}|{dispute_type}|{year}"
                 state = progress.get(progress_key, {}) if progress is not None else {}
-                if historical and state.get("complete") and not full_refresh:
-                    print("Already completed; skipping", flush=True)
+                if (
+                    historical
+                    and state.get("complete")
+                    and state.get("verified")
+                    and not full_refresh
+                ):
+                    print(f"Checkpoint: skipping {progress_key}", flush=True)
                     continue
 
                 start_page = 1
-                if historical and not full_refresh:
+                if historical and not full_refresh and not state.get("complete"):
                     start_page = max(1, state.get("next_page", 1) - 1)
-                    if start_page > 1:
-                        print(f"Resuming at page {start_page}", flush=True)
+                    if state.get("next_page"):
+                        print(
+                            f"Checkpoint: resuming {progress_key} at page {start_page}",
+                            flush=True,
+                        )
                 if historical and full_refresh and progress is not None:
                     progress[progress_key] = {"next_page": 1}
                     save_progress(progress)
                 can_advance = True
+                expected_total_pages = None
 
                 # Arbitrary 500 since it breaks before it gets to it
                 for page_no in range(start_page, 500):
@@ -226,7 +235,23 @@ def get_page_items(processed_pdfs=None, progress=None, full_refresh=False):
                             RTB_REFRESH_URL, headers=POST_HEADERS, json=data, timeout=60
                         )
                         response.raise_for_status()
-                        template = response.json()["template"]
+                        payload = response.json()
+                        template = payload["template"]
+                        pager = payload["settings"]["pager"]
+                        total_pages = pager["total_pages"]
+                        if (
+                            pager["page"] != page_no
+                            or not isinstance(total_pages, int)
+                            or total_pages < 0
+                        ):
+                            raise ValueError(f"Invalid pagination: {pager}")
+                        if expected_total_pages is None:
+                            expected_total_pages = total_pages
+                        elif total_pages != expected_total_pages:
+                            if historical and progress is not None:
+                                progress[progress_key] = {"next_page": 1}
+                                save_progress(progress)
+                            raise ValueError(f"Page count changed: {pager}")
                     except Exception as exc:
                         raise RuntimeError(
                             f"Listing failed: {main_type}, {dispute_type}, "
@@ -239,11 +264,19 @@ def get_page_items(processed_pdfs=None, progress=None, full_refresh=False):
                     download_cards = soup.find_all("article")
 
                     if not download_cards:
-                        # Finished
-                        if historical and progress is not None and can_advance:
-                            progress[progress_key] = {"complete": True}
-                            save_progress(progress)
+                        if page_no != 1 or total_pages != 0:
+                            if historical and progress is not None:
+                                progress[progress_key] = {"next_page": 1}
+                                save_progress(progress)
+                            raise RuntimeError(
+                                f"Unexpected empty listing: {progress_key}, page {page_no}"
+                            )
+                        # An empty first page is cheap to recheck next run.
                         break
+                    if page_no > total_pages:
+                        raise RuntimeError(
+                            f"Invalid page count: {progress_key}, page {page_no} of {total_pages}"
+                        )
 
                     time.sleep(1)
                     for item in download_cards:
@@ -251,14 +284,24 @@ def get_page_items(processed_pdfs=None, progress=None, full_refresh=False):
 
                     if historical and progress is not None and can_advance:
                         can_advance = all(
-                            link["href"].split("/")[-1].casefold()
-                            in processed_pdfs
+                            item.find("a", href=True) is not None
+                            and all(
+                                link["href"].split("/")[-1].casefold()
+                                in processed_pdfs
+                                for link in item.find_all("a", href=True)
+                            )
                             for item in download_cards
-                            for link in item.find_all("a", href=True)
                         )
                         if can_advance:
-                            progress[progress_key] = {"next_page": page_no + 1}
+                            progress[progress_key] = (
+                                {"complete": True, "verified": True}
+                                if page_no == total_pages
+                                else {"next_page": page_no + 1}
+                            )
                             save_progress(progress)
+
+                    if page_no == total_pages:
+                        break
 
 
 def scrape(scrape_type, property_source="portal", full_refresh=False):

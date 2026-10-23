@@ -12,7 +12,11 @@ import requests
 from bs4 import BeautifulSoup
 
 from rtb_scraper.register import register, RegisterObject
-from rtb_scraper.settings import LOG_LOCATION, RTB_TRIBUNAL_AND_DETERMINATION_DIR
+from rtb_scraper.settings import (
+    DATA_LOCATION,
+    LOG_LOCATION,
+    RTB_TRIBUNAL_AND_DETERMINATION_DIR,
+)
 from rtb_scraper.constants import (
     RTB_REFRESH_URL,
     MAIN_TYPES,
@@ -40,6 +44,15 @@ from rtb_scraper.determination import (
     determinations,
     extract_determination_data_from_text,
 )
+
+
+PROGRESS_PATH = Path(DATA_LOCATION) / "scrape_progress.json"
+
+
+def save_progress(progress):
+    temp_path = PROGRESS_PATH.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(progress))
+    temp_path.replace(PROGRESS_PATH)
 
 
 def process_tribunal(fp, raw_text_path, subject_of_dispute, source_pdf):
@@ -171,7 +184,9 @@ def property_objects(data, current_month):
             yield rtb_obj
 
 
-def get_page_items():
+def get_page_items(processed_pdfs=None, progress=None, full_refresh=False):
+    if processed_pdfs is None:
+        processed_pdfs = set()
     print("Cannot give ETA")
 
     bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
@@ -185,8 +200,26 @@ def get_page_items():
             for year in list(range(2015, datetime.datetime.now().year + 1)):
                 print(f"\nYear: {year}")
 
+                # Always rescan the current year for new orders.
+                historical = year < datetime.datetime.now().year
+                progress_key = f"{main_type}|{dispute_type}|{year}"
+                state = progress.get(progress_key, {}) if progress is not None else {}
+                if historical and state.get("complete") and not full_refresh:
+                    print("Already completed; skipping", flush=True)
+                    continue
+
+                start_page = 1
+                if historical and not full_refresh:
+                    start_page = max(1, state.get("next_page", 1) - 1)
+                    if start_page > 1:
+                        print(f"Resuming at page {start_page}", flush=True)
+                if historical and full_refresh and progress is not None:
+                    progress[progress_key] = {"next_page": 1}
+                    save_progress(progress)
+                can_advance = True
+
                 # Arbitrary 500 since it breaks before it gets to it
-                for idx, page_no in enumerate(range(1, 500)):
+                for page_no in range(start_page, 500):
                     data = get_post_data(year, dispute_type, main_type, page_no)
                     try:
                         response = requests.post(
@@ -200,23 +233,35 @@ def get_page_items():
                             f"year {year}, page {page_no}: {exc}"
                         ) from exc
 
-                    bar.update(idx)
+                    bar.update(page_no - 1)
                     soup = BeautifulSoup(template, "html.parser")
 
                     download_cards = soup.find_all("article")
 
                     if not download_cards:
                         # Finished
+                        if historical and progress is not None and can_advance:
+                            progress[progress_key] = {"complete": True}
+                            save_progress(progress)
                         break
 
-                    # Be kind, be patient
-                    time.sleep(5)
-
+                    time.sleep(1)
                     for item in download_cards:
                         yield (main_type, dispute_type, item)
 
+                    if historical and progress is not None and can_advance:
+                        can_advance = all(
+                            link["href"].split("/")[-1].casefold()
+                            in processed_pdfs
+                            for item in download_cards
+                            for link in item.find_all("a", href=True)
+                        )
+                        if can_advance:
+                            progress[progress_key] = {"next_page": page_no + 1}
+                            save_progress(progress)
 
-def scrape(scrape_type, property_source="portal"):
+
+def scrape(scrape_type, property_source="portal", full_refresh=False):
     if scrape_type == "property":
         if property_source == "legacy":
             print(
@@ -230,15 +275,22 @@ def scrape(scrape_type, property_source="portal"):
             print(f"Processing: {county}")
             process_property(county_id, source=property_source)
     elif scrape_type == "tribunal_and_determination":
-        for _, subject_of_dispute, item in get_page_items():
+        progress = json.loads(PROGRESS_PATH.read_text()) if PROGRESS_PATH.exists() else {}
+        processed_pdfs = {
+            filename.casefold()
+            for model in (Tribunal, Determination)
+            for (filename,) in model.select(model.source_pdf).tuples()
+            if filename
+        }
+        for _, subject_of_dispute, item in get_page_items(
+            processed_pdfs, progress, full_refresh
+        ):
             for link in item.find_all("a"):
                 url = link["href"]
 
                 filename = url.split("/")[-1]
 
-                if tribunals.exists(source_pdf=filename) or determinations.exists(
-                    source_pdf=filename
-                ):
+                if filename.casefold() in processed_pdfs:
                     continue
 
                 print(f"Processing PDF: {filename}", flush=True)
@@ -274,6 +326,8 @@ def scrape(scrape_type, property_source="portal"):
                     print(f"Not a tribunal or determination: {raw_text_path}")
                     continue
 
+                processed_pdfs.add(filename.casefold())
+
                 for path in (original_pdf, computed_text_pdf):
                     if os.path.exists(path):
                         os.remove(path)
@@ -295,10 +349,19 @@ def main():
         default="portal",
         help="County API to use (legacy data freshness and completeness are unverified)",
     )
+    parser.add_argument(
+        "--full-refresh",
+        action="store_true",
+        help="Recheck completed historical dispute listings",
+    )
     args = parser.parse_args()
 
     try:
-        scrape(args.type, property_source=args.property_source)
+        scrape(
+            args.type,
+            property_source=args.property_source,
+            full_refresh=args.full_refresh,
+        )
     except BaseException:
         print(file=sys.stdout, flush=True)
         traceback.print_exc(file=sys.stdout)
